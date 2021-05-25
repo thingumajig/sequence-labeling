@@ -1,0 +1,4 @@
+[core]
+    remote = sequence-labeling-data
+['remote "sequence-labeling-data"']
+    url = gdrive://16BFv3iQwSkSIJ5UBLG1UKKW7aScyLtIV
