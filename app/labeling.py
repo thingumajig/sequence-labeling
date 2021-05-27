@@ -28,13 +28,14 @@ label_list = [
     "I-MISC",
 ]
 
-TAGS = dict(
-    (
-        ("PER", "#8ef"),
-        ("ORG", "#faa"),
-        ("LOC", "#fea"),
-    )
-)
+TAGS = {
+    "B-PER": "#8ef",
+    "I-PER": "#8ef",
+    "B-ORG": "#faa",
+    "I-ORG": "#faa",
+    "B-LOC": "#fea",
+    "I-LOC": "#fea",
+}
 
 s = st.text_area(
     "Input",
@@ -49,19 +50,58 @@ preds = model(input_ids)
 labels = np.argmax(preds.logits[0].detach().numpy(), axis=1)
 tokens = tokenizer.convert_ids_to_tokens(ti)
 
+sLower = s.lower()
+
 annotated = []
-for t, l in zip(tokens, labels):
-    t = f"{t} "
-    label = label_list[l]
+next = 0
+interesting = []
+for i, t, l in zip(ti, tokens, labels):
+    continuation = False
+
+    if i in tokenizer.all_special_ids:
+        continue
+    if t.startswith("##"):
+        continuation = True
+        t = t[2:]
+
+    pos = sLower.find(t[0], next)
+    if pos == -1:
+        raise Exception(f"Can't find '{t}' from position {next}")
+    if pos > next:
+        annotated.append(" ")
+    next = pos + len(t)
+    word = s[pos:next]
+
+    if continuation:
+        tagged, info = last
+        if isinstance(tagged, tuple):
+            _w, _l, _c = tagged
+            tagged = _w + word, _l, _c
+
+            (_pos, _end) = info
+            info = _pos, next
+            interesting[-1] = tagged, info
+        else:
+            tagged = tagged + word
+        annotated[-1] = tagged
+        last = tagged, info
+        continue
+
+    info = (pos, next)
+
     tagged = None
-    if "-" in label:
-        tag = label.split("-")[1]
-        coloring = TAGS.get(tag)
-        if coloring:
-            tagged = (t, tag, coloring)
-    tagged = tagged or t
+    label = label_list[l]
+    coloring = TAGS.get(label)
+    if coloring:
+        tagged = (word, label, coloring)
+        interesting.append((tagged, info))
+    tagged = tagged or word
+
+    last = tagged, info
+
     annotated.append(tagged)
 
-    # st.write(f"{t}\t\t{label_list[l]}")
-# st.write(annotated)
 annotated_text(*annotated)
+
+"""Interesting:"""
+st.write([(tagged[0], tagged[1], *info) for (tagged, info) in interesting])
