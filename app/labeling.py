@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 import streamlit as st
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification
@@ -37,8 +38,9 @@ TAGS = {
     "I-LOC": "#fea",
 }
 
+st.title("Input data:")
 s = st.text_area(
-    "Input",
+    "",
     value="Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer.",
 )
 
@@ -101,7 +103,12 @@ for i, t, l in zip(ti, tokens, labels):
 
     annotated.append(tagged)
 
+st.title("Annotated:")
 annotated_text(*annotated)
 
-"""Interesting:"""
-st.write([(tagged[0], tagged[1], *info) for (tagged, info) in interesting])
+st.title("Interesting:")
+df = pd.DataFrame(
+    [(tagged[0], tagged[1], *info) for (tagged, info) in interesting],
+    columns=("Word", "Label", "Start", "End"),
+)
+st.table(df)
