@@ -5,7 +5,7 @@ import streamlit as st
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification
 from annotated_text import annotated_text
-
+from anytree import Node, RenderTree, AsciiStyle, PreOrderIter
 
 DATA_DIR = os.path.join(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "data"
@@ -29,13 +29,19 @@ label_list = [
     "I-MISC",
 ]
 
+TAGS_MAP = {
+    "B-PER": "PER",
+    "I-PER": "PER",
+    "B-ORG": "ORG",
+    "I-ORG": "ORG",
+    "B-LOC": "LOC",
+    "I-LOC": "LOC",
+}
+
 TAGS = {
-    "B-PER": "#8ef",
-    "I-PER": "#8ef",
-    "B-ORG": "#faa",
-    "I-ORG": "#faa",
-    "B-LOC": "#fea",
-    "I-LOC": "#fea",
+    "PER": "#8ef",
+    "ORG": "#faa",
+    "LOC": "#fea",
 }
 
 st.title("Input data:")
@@ -52,56 +58,114 @@ preds = model(input_ids)
 labels = np.argmax(preds.logits[0].detach().numpy(), axis=1)
 tokens = tokenizer.convert_ids_to_tokens(ti)
 
-sLower = s.lower()
 
-annotated = []
-next = 0
-interesting = []
-for i, t, l in zip(ti, tokens, labels):
-    continuation = False
+def makeTree(s: str):
+    sLower = s.lower()
+    root = {}
+    root = Node("ROOT", type="root")
 
-    if i in tokenizer.all_special_ids:
-        continue
-    if t.startswith("##"):
-        continuation = True
-        t = t[2:]
+    lastTag = None
+    lastWord = None
 
-    pos = sLower.find(t[0], next)
-    if pos == -1:
-        raise Exception(f"Can't find '{t}' from position {next}")
-    if pos > next:
-        annotated.append(" ")
-    next = pos + len(t)
-    word = s[pos:next]
+    next = 0
 
-    if continuation:
-        tagged, info = last
-        if isinstance(tagged, tuple):
-            _w, _l, _c = tagged
-            tagged = _w + word, _l, _c
+    for i, t, l in zip(ti, tokens, labels):
+        if i in tokenizer.all_special_ids:
+            continue
 
-            (_pos, _end) = info
-            info = _pos, next
-            interesting[-1] = tagged, info
+        continuation = False
+
+        if t.startswith("##"):
+            continuation = True
+            t = t[2:]
+
+        pos = sLower.find(t[0], next)
+        if pos == -1:
+            raise Exception(f"Can't find '{t}' from position {next}")
+        if pos > 0 and pos == next:
+            continuation = True
+        next = pos + len(t)
+        word = s[pos:next]
+
+        label = label_list[l]
+        tag = TAGS_MAP.get(label) or label
+        if not lastTag or tag != lastTag.tag:
+            lastTag = Node(f"[{tag}]", type="tag", tag=tag, parent=root)
+            lastWord = Node(
+                f"{'##' if continuation else ''}{word}",
+                type="word",
+                word=word,
+                s=pos,
+                e=next,
+                cont=continuation,
+                label=label,
+                parent=lastTag,
+            )
         else:
-            tagged = tagged + word
-        annotated[-1] = tagged
-        last = tagged, info
-        continue
+            parent = None
+            if label != tag:
+                if lastWord:
+                    if label.startswith("I-") and lastWord.label.startswith("B-"):
+                        parent = lastTag
+                    elif label == lastWord.label and continuation:
+                        parent = lastWord
+                    else:
+                        parent = lastTag = Node(
+                            f"[{tag}]", type="tag", tag=tag, parent=root
+                        )
+                else:
+                    parent = lastTag
+            else:
+                if continuation and lastWord:
+                    parent = lastWord
+                else:
+                    parent = lastTag = Node(
+                        f"[{tag}]", type="tag", tag=tag, parent=root
+                    )
 
-    info = (pos, next)
+            lastWord = Node(
+                f"{'##' if continuation else ''}{word}",
+                type="word",
+                word=word,
+                s=pos,
+                e=next,
+                cont=continuation,
+                label=label,
+                parent=parent,
+            )
+    return root
 
-    tagged = None
-    label = label_list[l]
-    coloring = TAGS.get(label)
-    if coloring:
-        tagged = (word, label, coloring)
-        interesting.append((tagged, info))
-    tagged = tagged or word
 
-    last = tagged, info
+def walkTree(tree):
+    annotated = []
+    interesting = []
+    firstWord = True
+    for t in PreOrderIter(tree, maxlevel=2, filter_=lambda n: n.type == "tag"):
+        words = []
+        start, end = -1, -1
+        for w in PreOrderIter(t, filter_=lambda n: n.type == "word"):
+            if not firstWord and not w.cont:
+                words.append(" ")
+            if start == -1:
+                start = w.s
+            end = w.e
 
-    annotated.append(tagged)
+            words.append(w.word)
+            firstWord = False
+
+        coloring = TAGS.get(t.tag)
+        if coloring:
+            tagged = ("".join(words), t.tag, coloring)
+            annotated.append(tagged)
+            interesting.append((tagged, (start, end)))
+        else:
+            annotated.append("".join(words))
+
+    return annotated, interesting
+
+
+tree = makeTree(s)
+annotated, interesting = walkTree(tree)
 
 st.title("Annotated:")
 annotated_text(*annotated)
@@ -109,6 +173,64 @@ annotated_text(*annotated)
 st.title("Interesting:")
 df = pd.DataFrame(
     [(tagged[0], tagged[1], *info) for (tagged, info) in interesting],
-    columns=("Word", "Label", "Start", "End"),
+    columns=("Fragment", "Tag", "Start", "End"),
 )
 st.table(df)
+
+st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
+
+
+# OLD CODE HERE
+# def walk1(sLower):
+#     annotated = []
+#     next = 0
+#     interesting = []
+#     for i, t, l in zip(ti, tokens, labels):
+#         if i in tokenizer.all_special_ids:
+#             continue
+
+#         continuation = False
+#         if t.startswith("##"):
+#             continuation = True
+#             t = t[2:]
+
+#         pos = sLower.find(t[0], next)
+#         if pos == -1:
+#             raise Exception(f"Can't find '{t}' from position {next}")
+#         if pos > next:
+#             annotated.append(" ")
+#         next = pos + len(t)
+#         word = s[pos:next]
+
+#         if continuation:
+#             tagged, info = last
+#             if isinstance(tagged, tuple):
+#                 _w, _l, _c = tagged
+#                 tagged = _w + word, _l, _c
+
+#                 (_pos, _end) = info
+#                 info = _pos, next
+#                 interesting[-1] = tagged, info
+#             else:
+#                 tagged = tagged + word
+#             annotated[-1] = tagged
+#             last = tagged, info
+#             continue
+
+#         info = (pos, next)
+
+#         tagged = None
+#         label = label_list[l]
+#         tag = TAGS_MAP.get(label) or label
+#         coloring = TAGS.get(tag)
+#         if coloring:
+#             tagged = (word, tag, coloring)
+#             interesting.append((tagged, info))
+#         tagged = tagged or word
+
+#         last = tagged, info
+
+#         annotated.append(tagged)
+#     return annotated, interesting
+
+# annotated, interesting = walk1(s.lower())

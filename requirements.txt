@@ -6,3 +6,4 @@ seqeval
 
 streamlit
 st-annotated-text
+anytree
