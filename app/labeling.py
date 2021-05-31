@@ -11,9 +11,9 @@ DATA_DIR = os.path.join(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "data"
 )
 
-model_checkpoint = os.path.join(DATA_DIR, "models", "checkpoints", "checkpoint-2500")
+CHECKPOINT = os.path.join(DATA_DIR, "models", "checkpoints", "checkpoint-2500")
 
-label_list = [
+LABELS_LIST = [
     "O",
     "B-PER",
     "I-PER",
@@ -59,7 +59,6 @@ def makeTree(s: str, model_checkpoint: str):
     tokens = tokenizer.convert_ids_to_tokens(ti)
 
     sLower = s.lower()
-    root = {}
     root = Node("ROOT", type="root")
 
     lastTag = None
@@ -85,7 +84,7 @@ def makeTree(s: str, model_checkpoint: str):
         next = pos + len(t)
         word = s[pos:next]
 
-        label = label_list[l]
+        label = LABELS_LIST[l]
         tag = TAGS_MAP.get(label) or label
         if not lastTag or tag != lastTag.tag:
             lastTag = Node(f"[{tag}]", type="tag", tag=tag, parent=root)
@@ -162,7 +161,7 @@ def walkTree(tree):
     return annotated, interesting
 
 
-tree = makeTree(s, model_checkpoint)
+tree = makeTree(s, CHECKPOINT)
 annotated, interesting = walkTree(tree)
 
 st.title("Annotated:")
@@ -176,59 +175,3 @@ df = pd.DataFrame(
 st.table(df)
 
 st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
-
-
-# OLD CODE HERE
-# def walk1(sLower):
-#     annotated = []
-#     next = 0
-#     interesting = []
-#     for i, t, l in zip(ti, tokens, labels):
-#         if i in tokenizer.all_special_ids:
-#             continue
-
-#         continuation = False
-#         if t.startswith("##"):
-#             continuation = True
-#             t = t[2:]
-
-#         pos = sLower.find(t[0], next)
-#         if pos == -1:
-#             raise Exception(f"Can't find '{t}' from position {next}")
-#         if pos > next:
-#             annotated.append(" ")
-#         next = pos + len(t)
-#         word = s[pos:next]
-
-#         if continuation:
-#             tagged, info = last
-#             if isinstance(tagged, tuple):
-#                 _w, _l, _c = tagged
-#                 tagged = _w + word, _l, _c
-
-#                 (_pos, _end) = info
-#                 info = _pos, next
-#                 interesting[-1] = tagged, info
-#             else:
-#                 tagged = tagged + word
-#             annotated[-1] = tagged
-#             last = tagged, info
-#             continue
-
-#         info = (pos, next)
-
-#         tagged = None
-#         label = label_list[l]
-#         tag = TAGS_MAP.get(label) or label
-#         coloring = TAGS.get(tag)
-#         if coloring:
-#             tagged = (word, tag, coloring)
-#             interesting.append((tagged, info))
-#         tagged = tagged or word
-
-#         last = tagged, info
-
-#         annotated.append(tagged)
-#     return annotated, interesting
-
-# annotated, interesting = walk1(s.lower())
