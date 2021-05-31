@@ -13,10 +13,6 @@ DATA_DIR = os.path.join(
 
 model_checkpoint = os.path.join(DATA_DIR, "models", "checkpoints", "checkpoint-2500")
 
-
-tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
-model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
-
 label_list = [
     "O",
     "B-PER",
@@ -51,15 +47,17 @@ s = st.text_area(
 )
 
 
-ti = tokenizer.encode(s)
-input_ids = torch.tensor([ti])
+def makeTree(s: str, model_checkpoint: str):
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+    model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
 
-preds = model(input_ids)
-labels = np.argmax(preds.logits[0].detach().numpy(), axis=1)
-tokens = tokenizer.convert_ids_to_tokens(ti)
+    ti = tokenizer.encode(s)
+    input_ids = torch.tensor([ti])
 
+    preds = model(input_ids)
+    labels = np.argmax(preds.logits[0].detach().numpy(), axis=1)
+    tokens = tokenizer.convert_ids_to_tokens(ti)
 
-def makeTree(s: str):
     sLower = s.lower()
     root = {}
     root = Node("ROOT", type="root")
@@ -164,7 +162,7 @@ def walkTree(tree):
     return annotated, interesting
 
 
-tree = makeTree(s)
+tree = makeTree(s, model_checkpoint)
 annotated, interesting = walkTree(tree)
 
 st.title("Annotated:")
