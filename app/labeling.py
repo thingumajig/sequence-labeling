@@ -1,11 +1,14 @@
 import os
+from typing import List, Set
 import numpy as np
 import pandas as pd
 import streamlit as st
 import torch
+from nltk.tokenize import sent_tokenize
 from transformers import AutoTokenizer, AutoModelForTokenClassification
 from annotated_text import annotated_text
 from anytree import Node, RenderTree, AsciiStyle, PreOrderIter
+
 
 DATA_DIR = os.path.join(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "data"
@@ -44,20 +47,38 @@ st.title("Input data:")
 s = st.text_area(
     "",
     value="Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer.",
+    height=100,
 )
 
 
-def makeTree(s: str, model_checkpoint: str):
+@st.cache(allow_output_mutation=True)
+def initialize(model_checkpoint: str):
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
     model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
+    return tokenizer, model
 
-    ti = tokenizer.encode(s)
-    input_ids = torch.tensor([ti])
 
-    preds = model(input_ids)
-    labels = np.argmax(preds.logits[0].detach().numpy(), axis=1)
-    tokens = tokenizer.convert_ids_to_tokens(ti)
+def processText(s: str, model_checkpoint: str):
+    tokenizer, model = initialize(model_checkpoint)
+    sentences = sent_tokenize(s)
+    st.write("Sentences:", sentences)
 
+    special_ids = set(tokenizer.all_special_ids)
+    tis = [tokenizer.encode(sent) for sent in sentences]
+    input_ids = [torch.tensor([ti]) for ti in tis]
+    logits = [model(ii).logits[0] for ii in input_ids]
+
+    trees = []
+    for sent, ti, logit in zip(sentences, tis, logits):
+        labels = np.argmax(logit.detach().numpy(), axis=1)
+        tokens = tokenizer.convert_ids_to_tokens(ti)
+        trees.append(makeTree(sent, ti, tokens, labels, special_ids))
+    return trees
+
+
+def makeTree(
+    s: str, ti: List[int], tokens: List[str], labels: List[int], special_ids: Set[int]
+):
     sLower = s.lower()
     root = Node("ROOT", type="root")
 
@@ -67,7 +88,7 @@ def makeTree(s: str, model_checkpoint: str):
     next = 0
 
     for i, t, l in zip(ti, tokens, labels):
-        if i in tokenizer.all_special_ids:
+        if i in special_ids:
             continue
 
         continuation = False
@@ -89,7 +110,7 @@ def makeTree(s: str, model_checkpoint: str):
         if not lastTag or tag != lastTag.tag:
             lastTag = Node(f"[{tag}]", type="tag", tag=tag, parent=root)
             lastWord = Node(
-                f"{'##' if continuation else ''}{word}",
+                f"{'##' if continuation else ''}{word} [{label}]",
                 type="word",
                 word=word,
                 s=pos,
@@ -102,7 +123,9 @@ def makeTree(s: str, model_checkpoint: str):
             parent = None
             if label != tag:
                 if lastWord:
-                    if label.startswith("I-") and lastWord.label.startswith("B-"):
+                    if label.startswith("I-") and lastWord.label.startswith(
+                        ("B-", "I-")
+                    ):
                         parent = lastTag
                     elif label == lastWord.label and continuation:
                         parent = lastWord
@@ -121,7 +144,7 @@ def makeTree(s: str, model_checkpoint: str):
                     )
 
             lastWord = Node(
-                f"{'##' if continuation else ''}{word}",
+                f"{'##' if continuation else ''}{word} [{label}]",
                 type="word",
                 word=word,
                 s=pos,
@@ -161,11 +184,16 @@ def walkTree(tree):
     return annotated, interesting
 
 
-tree = makeTree(s, CHECKPOINT)
-annotated, interesting = walkTree(tree)
+trees = processText(s, CHECKPOINT)
+annotated, interesting = [], []
+for tree in trees:
+    a, i = walkTree(tree)
+    annotated.extend(a)
+    annotated.append(" ")
+    interesting.extend(i)
 
 st.title("Annotated:")
-annotated_text(*annotated)
+annotated_text(*annotated, scrolling=True)
 
 st.title("Interesting:")
 df = pd.DataFrame(
@@ -174,4 +202,5 @@ df = pd.DataFrame(
 )
 st.table(df)
 
-st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
+for tree in trees:
+    st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
