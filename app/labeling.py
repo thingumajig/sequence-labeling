@@ -64,12 +64,15 @@ def processText(s: str, model_checkpoint: str):
     st.write("Sentences:", sentences)
 
     special_ids = set(tokenizer.all_special_ids)
-    tis = [tokenizer.encode(sent) for sent in sentences]
-    input_ids = [torch.tensor([ti]) for ti in tis]
-    logits = [model(ii).logits[0] for ii in input_ids]
+    # tis = [tokenizer.encode(sent) for sent in sentences]
+    # input_ids = [torch.tensor([ti]) for ti in tis]
+    # logits = [model(ii).logits[0] for ii in input_ids]
 
     trees = []
-    for sent, ti, logit in zip(sentences, tis, logits):
+    for sent in sentences:
+        ti = tokenizer.encode(sent)
+        input_ids = torch.tensor([ti])
+        logit = model(input_ids).logits[0]
         labels = np.argmax(logit.detach().numpy(), axis=1)
         tokens = tokenizer.convert_ids_to_tokens(ti)
         trees.append(makeTree(sent, ti, tokens, labels, special_ids))
