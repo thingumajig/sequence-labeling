@@ -8,3 +8,4 @@ streamlit
 st-annotated-text
 anytree
 nltk
+python-docx

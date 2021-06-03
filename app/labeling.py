@@ -8,6 +8,7 @@ from nltk.tokenize import sent_tokenize
 from transformers import AutoTokenizer, AutoModelForTokenClassification
 from annotated_text import annotated_text
 from anytree import Node, RenderTree, AsciiStyle, PreOrderIter
+from docx import Document
 
 
 DATA_DIR = os.path.join(
@@ -43,12 +44,33 @@ TAGS = {
     "LOC": "#fea",
 }
 
-st.title("Input data:")
-s = st.text_area(
-    "",
-    value="Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer.",
-    height=100,
+inputChoice = st.sidebar.radio(
+    "Choose input type:", ["Text input", "File input (.docx)"]
 )
+
+s = ""
+
+if inputChoice == "Text input":
+    st.title("Input data:")
+    s = st.text_area(
+        "",
+        value="Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer.",
+        height=100,
+    )
+else:
+
+    def readDocx(file):
+        document = Document(file)
+        text = []
+        for p in document.paragraphs:
+            rs = p._element.xpath(".//w:t")
+            text.append(" ".join([r.text for r in rs]))
+        return "\n".join(text)
+
+    st.title("Upload file:")
+    file = st.file_uploader("", ("docx",))
+    if file:
+        s = readDocx(file)
 
 
 @st.cache(allow_output_mutation=True)
