@@ -67,7 +67,7 @@ if file:
 else:
     value = "Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer."
 
-s = st.text_area(
+s: str = st.text_area(
     "Or input text here:",
     value=value,
     height=100,
@@ -92,21 +92,28 @@ def processText(s: str, model_checkpoint: str):
     # logits = [model(ii).logits[0] for ii in input_ids]
 
     trees = []
+    globalOffset = 0
     for sent in sentences:
         ti = tokenizer.encode(sent)
         input_ids = torch.tensor([ti])
         logit = model(input_ids).logits[0]
         labels = np.argmax(logit.detach().numpy(), axis=1)
         tokens = tokenizer.convert_ids_to_tokens(ti)
-        trees.append(makeTree(sent, ti, tokens, labels, special_ids))
+        globalOffset = s.index(sent, globalOffset)
+        trees.append(makeTree(sent, ti, tokens, labels, special_ids, globalOffset))
     return trees
 
 
 def makeTree(
-    s: str, ti: List[int], tokens: List[str], labels: List[int], special_ids: Set[int]
+    sentence: str,
+    ti: List[int],
+    tokens: List[str],
+    labels: List[int],
+    special_ids: Set[int],
+    globalOffset: int = 0,
 ):
-    sLower = s.lower()
-    root = Node("ROOT", type="root")
+    sLower = sentence.lower()
+    root = Node(sentence, type="root", globalOffset=globalOffset)
 
     lastTag = None
     lastWord = None
@@ -129,18 +136,18 @@ def makeTree(
         if pos > 0 and pos == next:
             continuation = True
         next = pos + len(t)
-        word = s[pos:next]
+        word = sentence[pos:next]
 
         label = LABELS_LIST[l]
         tag = TAGS_MAP.get(label) or label
         if not lastTag or tag != lastTag.tag:
             lastTag = Node(f"[{tag}]", type="tag", tag=tag, parent=root)
             lastWord = Node(
-                f"{'##' if continuation else ''}{word} [{label}]",
+                f"{'##' if continuation else ''}{word} [{label}] [{pos + globalOffset}:{next + globalOffset}]",
                 type="word",
                 word=word,
-                s=pos,
-                e=next,
+                s=pos + globalOffset,
+                e=next + globalOffset,
                 cont=continuation,
                 label=label,
                 parent=lastTag,
@@ -170,11 +177,11 @@ def makeTree(
                     )
 
             lastWord = Node(
-                f"{'##' if continuation else ''}{word} [{label}]",
+                f"{'##' if continuation else ''}{word} [{label}] [{pos + globalOffset}:{next + globalOffset}]",
                 type="word",
                 word=word,
-                s=pos,
-                e=next,
+                s=pos + globalOffset,
+                e=next + globalOffset,
                 cont=continuation,
                 label=label,
                 parent=parent,
@@ -185,23 +192,29 @@ def makeTree(
 def walkTree(tree):
     annotated = []
     interesting = []
-    firstWord = True
+    offset = tree.globalOffset
     for t in PreOrderIter(tree, maxlevel=2, filter_=lambda n: n.type == "tag"):
         words = []
         start, end = -1, -1
         for w in PreOrderIter(t, filter_=lambda n: n.type == "word"):
-            if not firstWord and not w.cont:
-                words.append(" ")
+            words.append(s[offset : w.s])
             if start == -1:
                 start = w.s
-            end = w.e
+            end = offset = w.e
 
             words.append(w.word)
-            firstWord = False
 
         coloring = TAGS.get(t.tag)
         if coloring:
-            tagged = ("".join(words), t.tag, coloring)
+            subString = "".join(words)
+            tagged = (subString, t.tag, coloring)
+            # try:
+            #     index = s.index(subString, start - 1)
+            # except:
+            #     st.write(subString, start, end)
+            #     raise
+            # if index != start:
+            #     st.write(subString, "Expected:", start, "Actual:", index)
             annotated.append(tagged)
             interesting.append((tagged, (start, end)))
         else:
@@ -228,5 +241,6 @@ df = pd.DataFrame(
 )
 st.table(df)
 
-for tree in trees:
-    st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
+if st.checkbox("Show debug tree"):
+    for tree in trees:
+        st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
