@@ -67,7 +67,7 @@ if file:
 else:
     value = "Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer."
 
-s: str = st.text_area(
+text: str = st.text_area(
     "Or input text here:",
     value=value,
     height=100,
@@ -197,7 +197,7 @@ def walkTree(tree):
         words = []
         start, end = -1, -1
         for w in PreOrderIter(t, filter_=lambda n: n.type == "word"):
-            words.append(s[offset : w.s])
+            words.append(text[offset : w.s])
             if start == -1:
                 start = w.s
             end = offset = w.e
@@ -223,7 +223,7 @@ def walkTree(tree):
     return annotated, interesting
 
 
-trees = processText(s, CHECKPOINT)
+trees = processText(text, CHECKPOINT)
 annotated, interesting = [], []
 for tree in trees:
     a, i = walkTree(tree)
