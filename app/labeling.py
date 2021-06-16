@@ -67,7 +67,8 @@ st.title("Input data:")
 
 file = st.file_uploader("Upload a file:", ("docx",))
 if file:
-    value = readDocx(file)
+    with st.spinner(text="Extracting text..."):
+        value = readDocx(file)
 else:
     value = "Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer."
 
@@ -234,27 +235,28 @@ def walkTree(tree):
 
 trees, sentences = processText(text)
 
-if st.sidebar.checkbox("Show sentences"):
-    st.write("Sentences:", sentences)
+with st.spinner(text="Rendering results..."):
+    if st.sidebar.checkbox("Show sentences"):
+        st.write("Sentences:", sentences)
 
-annotated, interesting = [], []
-for tree in trees:
-    a, i = walkTree(tree)
-    annotated.extend(a)
-    annotated.append(" ")
-    interesting.extend(i)
-
-st.title("Annotated:")
-annotated_text(*annotated, scrolling=True, height=300)
-
-if st.sidebar.checkbox("Show Interestiong Block"):
-    st.title("Interesting:")
-    df = pd.DataFrame(
-        [(tagged[0], tagged[1], *info) for (tagged, info) in interesting],
-        columns=("Fragment", "Tag", "Start", "End"),
-    )
-    st.table(df)
-
-if st.sidebar.checkbox("Show debug tree"):
+    annotated, interesting = [], []
     for tree in trees:
-        st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
+        a, i = walkTree(tree)
+        annotated.extend(a)
+        annotated.append(" ")
+        interesting.extend(i)
+
+    st.title("Annotated:")
+    annotated_text(*annotated, scrolling=True, height=300)
+
+    if st.sidebar.checkbox("Show Interesting Block"):
+        st.title("Interesting:")
+        df = pd.DataFrame(
+            [(tagged[0], tagged[1], *info) for (tagged, info) in interesting],
+            columns=("Fragment", "Tag", "Start", "End"),
+        )
+        st.table(df)
+
+    if st.sidebar.checkbox("Show debug tree"):
+        for tree in trees:
+            st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
