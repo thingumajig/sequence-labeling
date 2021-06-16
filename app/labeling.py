@@ -9,13 +9,17 @@ from transformers import AutoTokenizer, AutoModelForTokenClassification
 from annotated_text import annotated_text
 from anytree import Node, RenderTree, AsciiStyle, PreOrderIter
 from docx import Document
+from pathlib import Path
 
+st.set_page_config("NER DEMO", page_icon='🏷', layout="wide", initial_sidebar_state="auto")
 
-DATA_DIR = os.path.join(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "data"
-)
+DATA_DIR = Path.cwd() / 'data'
+# DATA_DIR = os.path.join(
+#     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "data"
+# )
 
-CHECKPOINT = os.path.join(DATA_DIR, "models", "checkpoints", "checkpoint-2500")
+# CHECKPOINT = os.path.join(DATA_DIR, "models", "checkpoints", "checkpoint-2500")
+CHECKPOINT = DATA_DIR / "models" / "checkpoints" / "checkpoint-2500"
 
 LABELS_LIST = [
     "O",
@@ -74,34 +78,39 @@ text: str = st.text_area(
 )
 
 
-@st.cache(allow_output_mutation=True)
+@st.cache(allow_output_mutation=True, show_spinner=True)
 def initialize(model_checkpoint: str):
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
     model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
     return tokenizer, model
 
 
-def processText(s: str, model_checkpoint: str):
-    tokenizer, model = initialize(model_checkpoint)
-    sentences = sent_tokenize(s)
-    st.write("Sentences:", sentences)
+tokenizer, model = initialize(str(CHECKPOINT))
 
-    special_ids = set(tokenizer.all_special_ids)
-    # tis = [tokenizer.encode(sent) for sent in sentences]
-    # input_ids = [torch.tensor([ti]) for ti in tis]
-    # logits = [model(ii).logits[0] for ii in input_ids]
 
-    trees = []
-    globalOffset = 0
-    for sent in sentences:
-        ti = tokenizer.encode(sent)
-        input_ids = torch.tensor([ti])
-        logit = model(input_ids).logits[0]
-        labels = np.argmax(logit.detach().numpy(), axis=1)
-        tokens = tokenizer.convert_ids_to_tokens(ti)
-        globalOffset = s.index(sent, globalOffset)
-        trees.append(makeTree(sent, ti, tokens, labels, special_ids, globalOffset))
-    return trees
+@st.cache(allow_output_mutation=True, show_spinner=False)
+def processText(s: str):
+    global tokenizer, model
+
+    with st.spinner(text="Labeling sequence:"):
+        sentences = sent_tokenize(s)
+
+        special_ids = set(tokenizer.all_special_ids)
+        # tis = [tokenizer.encode(sent) for sent in sentences]
+        # input_ids = [torch.tensor([ti]) for ti in tis]
+        # logits = [model(ii).logits[0] for ii in input_ids]
+
+        trees = []
+        globalOffset = 0
+        for sent in sentences:
+            ti = tokenizer.encode(sent)
+            input_ids = torch.tensor([ti])
+            logit = model(input_ids).logits[0]
+            labels = np.argmax(logit.detach().numpy(), axis=1)
+            tokens = tokenizer.convert_ids_to_tokens(ti)
+            globalOffset = s.index(sent, globalOffset)
+            trees.append(makeTree(sent, ti, tokens, labels, special_ids, globalOffset))
+        return trees, sentences
 
 
 def makeTree(
@@ -223,7 +232,11 @@ def walkTree(tree):
     return annotated, interesting
 
 
-trees = processText(text, CHECKPOINT)
+trees, sentences = processText(text)
+
+if st.sidebar.checkbox("Show sentences"):
+    st.write("Sentences:", sentences)
+
 annotated, interesting = [], []
 for tree in trees:
     a, i = walkTree(tree)
@@ -232,15 +245,16 @@ for tree in trees:
     interesting.extend(i)
 
 st.title("Annotated:")
-annotated_text(*annotated, scrolling=True)
+annotated_text(*annotated, scrolling=True, height=300)
 
-st.title("Interesting:")
-df = pd.DataFrame(
-    [(tagged[0], tagged[1], *info) for (tagged, info) in interesting],
-    columns=("Fragment", "Tag", "Start", "End"),
-)
-st.table(df)
+if st.sidebar.checkbox("Show Interestiong Block"):
+    st.title("Interesting:")
+    df = pd.DataFrame(
+        [(tagged[0], tagged[1], *info) for (tagged, info) in interesting],
+        columns=("Fragment", "Tag", "Start", "End"),
+    )
+    st.table(df)
 
-if st.checkbox("Show debug tree"):
+if st.sidebar.checkbox("Show debug tree"):
     for tree in trees:
         st.code(RenderTree(tree, style=AsciiStyle()).by_attr())
