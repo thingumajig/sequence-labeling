@@ -1,5 +1,4 @@
-import os
-from typing import List, Set
+from typing import List, Set, Dict
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -10,55 +9,56 @@ from annotated_text import annotated_text
 from anytree import Node, RenderTree, AsciiStyle, PreOrderIter
 from docx import Document
 from pathlib import Path
+from app.utils.color import getColorForText
 
-st.set_page_config("NER DEMO", page_icon='🏷', layout="wide", initial_sidebar_state="auto")
 
-DATA_DIR = Path.cwd() / 'data'
-# DATA_DIR = os.path.join(
-#     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "data"
-# )
+st.set_page_config(
+    "NER DEMO", page_icon="🏷", layout="wide", initial_sidebar_state="auto"
+)
 
-# CHECKPOINT = os.path.join(DATA_DIR, "models", "checkpoints", "checkpoint-2500")
+DATA_DIR = Path.cwd() / "data"
 CHECKPOINT = DATA_DIR / "models" / "checkpoints" / "checkpoint-2500"
 
-LABELS_LIST = [
-    "O",
-    "B-PER",
-    "I-PER",
-    "B-ORG",
-    "I-ORG",
-    "B-LOC",
-    "I-LOC",
-    "B-MISC",
-    "I-MISC",
-]
+tokenizer = model = None
+LABELS_DICT: Dict[int, str] = {}
+TAGS_MAP: Dict[str, str] = {}
+TAGS: Dict[str, str] = {}
 
-TAGS_MAP = {
-    "B-PER": "PER",
-    "I-PER": "PER",
-    "B-ORG": "ORG",
-    "I-ORG": "ORG",
-    "B-LOC": "LOC",
-    "I-LOC": "LOC",
-}
+IGNORE_LABELS = {"O", "B-MISC", "I-MISC"}
 
-TAGS = {
-    "PER": "#8ef",
-    "ORG": "#faa",
-    "LOC": "#fea",
-}
+DEFAULT_TEXT = "Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer."
 
-# inputChoice = st.sidebar.radio(
-#     "Choose input type:", ["Text input", "File input (.docx)"]
-# )
+
+def getTag(label):
+    return label.replace("B-", "").replace("I-", "")
+
+
+@st.cache(allow_output_mutation=True, show_spinner=True)
+def initialize(model_checkpoint: str):
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+    model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
+    LABELS_DICT = {int(k): v for (k, v) in model.config.id2label.items()}
+
+    TAGS_MAP = {l: getTag(l) for l in LABELS_DICT.values() if l not in IGNORE_LABELS}
+
+    TAGS = {t: getColorForText(t) for t in TAGS_MAP.values()}
+    return tokenizer, model, LABELS_DICT, TAGS_MAP, TAGS
+
+
+tokenizer, model, LABELS_DICT, TAGS_MAP, TAGS = initialize(str(CHECKPOINT))
 
 
 def readDocx(file):
     document = Document(file)
     text = []
     for p in document.paragraphs:
+        pText = []
         rs = p._element.xpath(".//w:t")
-        text.append(" ".join([r.text for r in rs]))
+        if rs:
+            pText.append("".join([r.text for r in rs]))
+        if pText:
+            pText[-1] += "."
+            text.append("".join(pText))
     return "\n".join(text)
 
 
@@ -70,23 +70,13 @@ if file:
     with st.spinner(text="Extracting text..."):
         value = readDocx(file)
 else:
-    value = "Germany's representative to the European Union's veterinary committee Werner Zwingmann said on Wednesday consumers should buy sheepmeat from countries other than Britain until the scientific advice was clearer."
+    value = DEFAULT_TEXT
 
 text: str = st.text_area(
-    "Or input text here:",
+    "Or input text here:" if not file else "",
     value=value,
     height=100,
 )
-
-
-@st.cache(allow_output_mutation=True, show_spinner=True)
-def initialize(model_checkpoint: str):
-    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
-    model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
-    return tokenizer, model
-
-
-tokenizer, model = initialize(str(CHECKPOINT))
 
 
 @st.cache(allow_output_mutation=True, show_spinner=False)
@@ -148,7 +138,7 @@ def makeTree(
         next = pos + len(t)
         word = sentence[pos:next]
 
-        label = LABELS_LIST[l]
+        label = LABELS_DICT[l]
         tag = TAGS_MAP.get(label) or label
         if not lastTag or tag != lastTag.tag:
             lastTag = Node(f"[{tag}]", type="tag", tag=tag, parent=root)
