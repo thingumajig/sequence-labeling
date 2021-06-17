@@ -37,11 +37,15 @@ def getTag(label):
 def initialize(model_checkpoint: str):
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
     model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
-    LABELS_DICT = {int(k): v for (k, v) in model.config.id2label.items()}
+
+    config = model.config
+
+    LABELS_DICT = {int(k): v for (k, v) in config.id2label.items()}
 
     TAGS_MAP = {l: getTag(l) for l in LABELS_DICT.values() if l not in IGNORE_LABELS}
 
     TAGS = {t: getColorForText(t) for t in TAGS_MAP.values()}
+
     return tokenizer, model, LABELS_DICT, TAGS_MAP, TAGS
 
 
@@ -87,16 +91,20 @@ def processText(s: str):
         sentences = sent_tokenize(s)
 
         special_ids = set(tokenizer.all_special_ids)
-        # tis = [tokenizer.encode(sent) for sent in sentences]
-        # input_ids = [torch.tensor([ti]) for ti in tis]
-        # logits = [model(ii).logits[0] for ii in input_ids]
+        # tis = [
+        #     tokenizer.encode(sent, padding="max_length") for sent in sentences
+        # ]
+        # input_ids = torch.tensor(tis)
+        # logits = model(input_ids).logits
 
         trees = []
         globalOffset = 0
-        for sent in sentences:
+        for i, sent in enumerate(sentences):
             ti = tokenizer.encode(sent)
             input_ids = torch.tensor([ti])
             logit = model(input_ids).logits[0]
+            # ti = tis[i]
+            # logit = logits[i]
             labels = np.argmax(logit.detach().numpy(), axis=1)
             tokens = tokenizer.convert_ids_to_tokens(ti)
             globalOffset = s.index(sent, globalOffset)
