@@ -1,0 +1,1 @@
+PYTHONPATH=. python app/bento_deploy/bento_packer.py
