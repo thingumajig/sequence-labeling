@@ -126,7 +126,7 @@ def makeTree(
 
         label = labelsDict[l]
         tag = tagsMap.get(label) or label
-        if not lastTag or tag != lastTag.tag:
+        if not lastTag or tag != lastTag.tag:  # type: ignore
             lastTag = Node(f"[{tag}]", type="tag", tag=tag, parent=root)
             lastWord = Node(
                 f"{'##' if continuation else ''}{word} [{label}] [{pos + globalOffset}:{next + globalOffset}]",
@@ -142,11 +142,11 @@ def makeTree(
             parent = None
             if label != tag:
                 if lastWord:
-                    if label.startswith("I-") and lastWord.label.startswith(
+                    if label.startswith("I-") and lastWord.label.startswith(  # type: ignore
                         ("B-", "I-")
                     ):
                         parent = lastTag
-                    elif label == lastWord.label and continuation:
+                    elif label == lastWord.label and continuation:  # type: ignore
                         parent = lastWord
                     else:
                         parent = lastTag = Node(
@@ -178,7 +178,7 @@ def makeTree(
 def walkTree(text, tree: Node, tags: Dict[str, str]):
     annotated = []
     interesting = []
-    offset = tree.globalOffset
+    offset = tree.globalOffset  # type: ignore
     for t in PreOrderIter(tree, maxlevel=2, filter_=lambda n: n.type == "tag"):
         words = []
         start, end = -1, -1
