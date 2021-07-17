@@ -58,7 +58,9 @@ def processText(s: str, modelArtifact: ModelArtifact):
     trees = []
     globalOffset = 0
     for i, sent in enumerate(sentences):
-        trees.append(processSentence(sent, modelArtifact, s, globalOffset))
+        tree = processSentence(sent, modelArtifact, s, globalOffset)
+        trees.append(tree)
+        globalOffset = tree.globalOffset  # type: ignore
     return trees, sentences
 
 
