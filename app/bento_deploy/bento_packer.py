@@ -1,9 +1,7 @@
 import os
 from pathlib import Path
-from typing import Dict
 from transformers import AutoTokenizer, AutoModelForTokenClassification
 
-from app.utils.labeling import getTag
 from app.bento_deploy.bento_service import TransformerService
 
 ts = TransformerService()
@@ -15,9 +13,7 @@ model_checkpoint = str(CHECKPOINT)
 tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 model = AutoModelForTokenClassification.from_pretrained(model_checkpoint)
 
-# Option 1: Pack using dictionary (recommended)
-artifact = {"model": model, "tokenizer": tokenizer}
-ts.pack("model", artifact)
+ts.pack("model", {"model": model, "tokenizer": tokenizer})
 
 saved_path = ts.save()
 if __name__ == "__main__":
