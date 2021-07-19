@@ -7,8 +7,6 @@ from anytree import RenderTree, AsciiStyle
 from pathlib import Path
 
 from app.utils.labeling import (
-    ModelArtifact,
-    ModelArtifactMetadata,
     prepareArtifact,
     processText,
     walkTree,
