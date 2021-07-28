@@ -21,6 +21,6 @@ class TransformerService(BentoService):
         tags = modelArtifact["metadata"]["tags"]
         for i, tree in enumerate(trees):
             _, result = walkTree(sentences[i], tree, tags)
-            interesting.extend(result)
+            interesting.append(result)
 
-        return [(tagged[1], *info) for (tagged, info) in interesting]
+        return [[(tagged[1], *info) for (tagged, info) in part] for part in interesting]
