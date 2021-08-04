@@ -1,3 +1,4 @@
+from anytree.node.node import Node
 from bentoml import env, artifacts, api, BentoService
 from bentoml.adapters import JsonInput
 from bentoml.frameworks.transformers import TransformersModelArtifact
@@ -17,10 +18,13 @@ class TransformerService(BentoService):
         for sentence in sentences:
             trees.append(processSentence(sentence, modelArtifact, sentence))
 
-        interesting = []
         tags = modelArtifact["metadata"]["tags"]
+        out = []
         for i, tree in enumerate(trees):
-            _, result = walkTree(sentences[i], tree, tags)
-            interesting.append(result)
+            if isinstance(tree, Node):
+                _, result = walkTree(sentences[i], tree, tags)
+                out.append([(tagged[1], *info) for (tagged, info) in result])
+            else:
+                out.append(tree)
 
-        return [[(tagged[1], *info) for (tagged, info) in part] for part in interesting]
+        return out

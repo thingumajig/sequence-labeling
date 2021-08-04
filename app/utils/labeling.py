@@ -16,12 +16,17 @@ class ModelArtifactMetadata(TypedDict):
     tagsMap: Dict[str, str]
     tags: Dict[str, str]
     specialIds: Set[int]
+    maxEmbeddings: int
 
 
 class ModelArtifact(TypedDict):
     model: Any
     tokenizer: Any
     metadata: ModelArtifactMetadata
+
+
+class ErrorResponse(TypedDict):
+    error: str
 
 
 def prepareArtifact(tokenizer, model, tagMapper=lambda tag: tag):
@@ -42,6 +47,7 @@ def prepareArtifact(tokenizer, model, tagMapper=lambda tag: tag):
             tagsMap=tagsMap,
             tags=tags,
             specialIds=specialIds,
+            maxEmbeddings=config.max_position_embeddings,
         ),
     )
 
@@ -58,9 +64,12 @@ def processText(s: str, modelArtifact: ModelArtifact):
     trees = []
     globalOffset = 0
     for i, sent in enumerate(sentences):
-        tree = processSentence(sent, modelArtifact, s, globalOffset)
-        trees.append(tree)
-        globalOffset = tree.globalOffset  # type: ignore
+        result = processSentence(sent, modelArtifact, s, globalOffset)
+        trees.append(result)
+        if isinstance(result, Node):
+            globalOffset = result.globalOffset  # type: ignore
+        else:
+            globalOffset += len(sent)
     return trees, sentences
 
 
@@ -69,6 +78,10 @@ def processSentence(sentence, modelArtifact: ModelArtifact, text=None, globalOff
     model = modelArtifact["model"]
     metadata = modelArtifact["metadata"]
     ti = tokenizer.encode(sentence)
+    if len(ti) > metadata["maxEmbeddings"]:
+        return ErrorResponse(
+            error=f"The sentence is too long, got {len(ti)} tokens, max {metadata['maxEmbeddings']}"
+        )
     input_ids = torch.tensor([ti])
     logit = model(input_ids).logits[0]
     # ti = tis[i]

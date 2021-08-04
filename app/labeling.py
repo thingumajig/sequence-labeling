@@ -1,3 +1,4 @@
+from anytree import Node
 from app.utils.converters import readDocx
 import pandas as pd
 import streamlit as st
@@ -58,16 +59,27 @@ with st.spinner(text="Rendering results..."):
     if st.sidebar.checkbox("Show sentences"):
         st.write("Sentences:", sentences)
 
-    annotated, interesting = [], []
+    annotated, interesting, errors = [], [], []
     tags = modelArtifact["metadata"]["tags"]
-    for tree in trees:
-        a, i = walkTree(text, tree, tags)
-        annotated.extend(a)
-        annotated.append(" ")
-        interesting.extend(i)
+    for index, tree in enumerate(trees):
+        if isinstance(tree, Node):
+            a, i = walkTree(text, tree, tags)
+            annotated.extend(a)
+            annotated.append(" ")
+            interesting.extend(i)
+        else:
+            errors.append([sentences[index], tree])
 
     st.title("Annotated:")
     annotated_text(*annotated, scrolling=True, height=300)
+
+    if errors:
+        st.title("Errors:")
+        df = pd.DataFrame(
+            errors,
+            columns=("Sentence", "Error"),
+        )
+        st.table(df)
 
     if st.sidebar.checkbox("Show Interesting Block"):
         st.title("Interesting:")
