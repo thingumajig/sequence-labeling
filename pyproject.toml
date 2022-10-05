@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "sequence-labeling"
+version = "0.1.0"
+description = "sequence labeling model and bento service"
+authors = ["Vadim <artifex.i@gmail.com>"]
+readme = "README.md"
+packages = [{include = "sequence_labeling"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+transformers = "^4.22.2"
+torch = {version = "^1.12.1", platform = "win32"}
+bentoml = "^1.0.7"
+
+[tool.poetry.group.dev.dependencies]
+jupyterlab = "^3.4.8"
+ipywidgets = "^8.0.2"
+jupyterlab-unfold = "^0.2.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

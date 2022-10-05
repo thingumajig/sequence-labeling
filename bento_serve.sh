@@ -1,1 +1,0 @@
-bentoml serve TransformerService:latest
