@@ -1,0 +1,14 @@
+service: "ner_service.py:svc"
+description: |
+    ##  Haystac NER service. 🍱
+
+labels:
+  owner: haystac
+  project: haystac-ner 
+include:
+- "*.py"
+python:
+  packages:
+  - transformers
+  - torch
+
